@@ -42,7 +42,57 @@ pub trait ReadBuffer {
     }
 }
 
+pub trait ReadBufferInverse {
+    fn is_empty(&self) -> bool;
+    fn is_full(&self) -> bool;
+    fn remaining(&self) -> usize;
+    fn capacity(&self) -> usize;
+    fn position(&self) -> usize { self.capacity() - self.remaining() }
+
+    fn rewind(&mut self, distance: usize);
+    fn truncate(&mut self, amount: usize);
+    fn reset(&mut self);
+
+    fn peek_next(&self, count: usize) -> &[u8];
+    fn peek_remaining(&self) -> &[u8] {
+        self.peek_next(self.remaining())
+    }
+
+    fn take_next(&mut self, count: usize) -> &[u8];
+    fn take_remaining(&mut self) -> &[u8] {
+        let rem = self.remaining();
+        self.take_next(rem)
+    }
+
+    //warning: untested!
+    fn push_to<W: WriteBufferInverse>(&mut self, output: &mut W) {
+        let count = cmp::min(output.remaining(), self.remaining());
+        cryptoutil::copy_memory(self.take_next(count), output.take_next(count));
+    }
+}
+
 pub trait WriteBuffer {
+    fn is_empty(&self) -> bool;
+    fn is_full(&self) -> bool;
+    fn remaining(&self) -> usize;
+    fn capacity(&self) -> usize;
+    fn position(&self) -> usize { self.capacity() - self.remaining() }
+
+    fn rewind(&mut self, distance: usize);
+    fn reset(&mut self);
+
+    // FIXME - Shouldn't need mut self
+    fn peek_read_buffer(&mut self) -> RefReadBuffer;
+
+    fn take_next(&mut self, count: usize) -> &mut [u8];
+    fn take_remaining(&mut self) -> &mut [u8] {
+        let rem = self.remaining();
+        self.take_next(rem)
+    }
+    fn take_read_buffer(&mut self) -> RefReadBuffer;
+}
+
+pub trait WriteBufferInverse {
     fn is_empty(&self) -> bool;
     fn is_full(&self) -> bool;
     fn remaining(&self) -> usize;
@@ -94,6 +144,41 @@ impl <'a> ReadBuffer for RefReadBuffer<'a> {
     fn take_next(&mut self, count: usize) -> &[u8] {
         let r = &self.buff[self.pos..self.pos + count];
         self.pos += count;
+        r
+    }
+}
+
+pub struct RefReadBufferInverse<'a> {
+    buff: &'a [u8],
+    pos: usize
+}
+
+impl <'a> RefReadBufferInverse<'a> {
+    pub fn new(buff: &[u8]) -> RefReadBufferInverse {
+        RefReadBufferInverse {
+            buff: buff,
+            pos: buff.len()
+        }
+    }
+}
+
+impl <'a> ReadBuffer for RefReadBuffer<'a> {
+    fn is_empty(&self) -> bool { self.pos == 0 }
+    fn is_full(&self) -> bool { self.pos == self.buff.len() }
+    fn remaining(&self) -> usize { self.pos }
+    fn capacity(&self) -> usize { self.buff.len() }
+
+    fn rewind(&mut self, distance: usize) { self.pos += distance; }
+    fn truncate(&mut self, amount: usize) {
+        self.buff = &self.buff[amount..];
+    }
+    fn reset(&mut self) { self.pos = self.buff.len(); }
+
+    fn peek_next(&self, count: usize) -> &[u8] { &self.buff[self.pos - count..self.pos] }
+
+    fn take_next(&mut self, count: usize) -> &[u8] {
+        let r = &self.buff[self.pos - count..self.pos];
+        self.pos -= count;
         r
     }
 }
@@ -187,6 +272,48 @@ impl <'a> WriteBuffer for RefWriteBuffer<'a> {
     fn take_read_buffer(&mut self) -> RefReadBuffer {
         let r = RefReadBuffer::new(&mut self.buff[..self.pos]);
         self.pos = 0;
+        r
+    }
+}
+
+pub struct RefWriteBufferInverse<'a> {
+    buff: &'a mut [u8],
+    len: usize,
+    pos: usize
+}
+
+impl <'a> RefWriteBufferInverse<'a> {
+    pub fn new(buff: &mut [u8]) -> RefWriteBufferInverse {
+        let len = buff.len();
+        RefWriteBufferInverse {
+            buff: buff,
+            len: len,
+            pos: len
+        }
+    }
+}
+
+impl <'a> WriteBuffer for RefWriteBufferInverse<'a> {
+    fn is_empty(&self) -> bool { self.pos == self.len }
+    fn is_full(&self) -> bool { self.pos == 0 }
+    fn remaining(&self) -> usize { self.pos }
+    fn capacity(&self) -> usize { self.len }
+
+    fn rewind(&mut self, distance: usize) { self.pos += distance; }
+    fn reset(&mut self) { self.pos = self.len; }
+
+    fn peek_read_buffer(&mut self) -> RefReadBufferInverse {
+        RefReadBufferInverse::new(&mut self.buff[self.pos..])
+    }
+
+    fn take_next(&mut self, count: usize) -> &mut [u8] {
+        let r = &mut self.buff[self.pos-count..self.pos];
+        self.pos -= count;
+        r
+    }
+    fn take_read_buffer(&mut self) -> RefReadBufferInverse {
+        let r = RefReadBufferInverse::new(&mut self.buff[self.pos..]);
+        self.pos = self.len;
         r
     }
 }
