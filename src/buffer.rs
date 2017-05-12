@@ -104,7 +104,7 @@ pub trait WriteBufferInverse {
 
     // FIXME - Shouldn't need mut self
     fn peek_read_buffer(&mut self) -> RefReadBufferInverse;
-    fn forward_read_buffer(&mut self,count: usize) -> RefReadBufferInverse;
+    fn peek_next(&self,count: usize) -> &[u8];
 
     fn take_next(&mut self, count: usize) -> &mut [u8];
     fn take_remaining(&mut self) -> &mut [u8] {
@@ -307,8 +307,8 @@ impl <'a> WriteBufferInverse for RefWriteBufferInverse<'a> {
         RefReadBufferInverse::new(&mut self.buff[self.pos..])
     }
 
-    fn forward_read_buffer(&mut self, count:usize) -> RefReadBufferInverse {
-        RefReadBufferInverse::new(&mut self.buff[self.pos - count..self.pos])
+    fn peek_next(&self, count:usize) -> &[u8] {
+        &self.buff[self.pos - count..self.pos]
     }
 
     fn take_next(&mut self, count: usize) -> &mut [u8] {
