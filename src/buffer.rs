@@ -103,14 +103,14 @@ pub trait WriteBufferInverse {
     fn reset(&mut self);
 
     // FIXME - Shouldn't need mut self
-    fn peek_read_buffer(&mut self) -> RefReadBuffer;
+    fn peek_read_buffer(&mut self) -> RefReadBufferInverse;
 
     fn take_next(&mut self, count: usize) -> &mut [u8];
     fn take_remaining(&mut self) -> &mut [u8] {
         let rem = self.remaining();
         self.take_next(rem)
     }
-    fn take_read_buffer(&mut self) -> RefReadBuffer;
+    fn take_read_buffer(&mut self) -> RefReadBufferInverse;
 }
 
 pub struct RefReadBuffer<'a> {
@@ -162,7 +162,7 @@ impl <'a> RefReadBufferInverse<'a> {
     }
 }
 
-impl <'a> ReadBuffer for RefReadBuffer<'a> {
+impl <'a> ReadBufferInverse for RefReadBufferInverse<'a> {
     fn is_empty(&self) -> bool { self.pos == 0 }
     fn is_full(&self) -> bool { self.pos == self.buff.len() }
     fn remaining(&self) -> usize { self.pos }
@@ -293,7 +293,7 @@ impl <'a> RefWriteBufferInverse<'a> {
     }
 }
 
-impl <'a> WriteBuffer for RefWriteBufferInverse<'a> {
+impl <'a> WriteBufferInverse for RefWriteBufferInverse<'a> {
     fn is_empty(&self) -> bool { self.pos == self.len }
     fn is_full(&self) -> bool { self.pos == 0 }
     fn remaining(&self) -> usize { self.pos }
